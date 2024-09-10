@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2FA Solver - Retrieve OTP</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .main {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            max-width: 900px;
+            margin: 20px auto;
+        }
+        h1 {
+            font-size: 24px;
+            color: #343a40;
+            margin-bottom: 20px;
+            text-align: center;
+            border-bottom: 2px solid #343a40;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .text2style, .text3style {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #ced4da;
+        }
+        .text2style {
+            background: #e9f5ff;
+            font-size: 14px;
+        }
+        .text3style {
+            background: #d4edda;
+            font-size: 24px;
+            color: #155724;
+            font-weight: bold;
+        }
+        .label {
+            display: inline-block;
+            padding: 4px 8px;
+            font-size: 14px;
+            border-radius: 4px;
+            margin: 2px;
+        }
+        .label-default {
+            background-color: #e2e3e5;
+            color: #495057;
+        }
+        .label-primary {
+            background-color: #007bff;
+            color: #fff;
+        }
+        .important {
+            background-color: #dc3545;
+            color: #fff;
+        }
+        .clearfix::after {
+            content: "";
+            clear: both;
+            display: table;
+        }
+        .btn-order {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        .btn-order:hover {
+            background-color: #218838;
+        }
+        .contact-info {
+            margin-top: 20px;
+            font-size: 14px;
+            text-align: center;
+        }
+        .contact-info a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .contact-info a:hover {
+            text-decoration: underline;
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        .blink {
+            animation: blink 1s infinite;
+        }
+    </style>
+</head>
+<body>
+
+<div class="main">
+    <h1>Retrieve One-Time Password in Real-Time</h1>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="secret">Secret (base32)</label>
+                <textarea id="secret" class="text2style">4CMGD6DHKGLORNS5</textarea>
+            </div>
+            <div class="form-group">
+                <label>Updating in</label>
+                <div id="updatingIn">23 secs</div>
+            </div>
+            <div class="form-group">
+                <label>One-time Password</label>
+                <textarea readonly id="otp" class="text3style">600329</textarea>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group">
+                <label>Secret (hex)</label>
+                <div><span id="secretHex" class="label label-default">e09861f8675196e8b65d</span> <span id="secretHexLength">80 bits</span></div>
+            </div>
+            <div class="form-group">
+                <label>Unix epoch div 30 (padded hex)</label>
+                <div id="epoch" class="label label-default">00000000036de190</div>
+            </div>
+            <div class="form-group">
+                <div id="hmac"><span class="label label-default">4d1e72c7</span><span class="label label-primary">0a86b509</span><span class="label label-default">c17546d8524e5929de8d9ea4</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="contact-info">
+        <p><strong>Author:</strong> Mokles</p>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsSHA/2.0.2/sha.js"></script>
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script>
+    function dec2hex(s) { return (s < 15.5 ? '0' : '') + Math.round(s).toString(16); }
+    function hex2dec(s) { return parseInt(s, 16); }
+
+    function base32tohex(base32) {
+        var base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        var bits = "";
+        var hex = "";
+
+        base32 = base32.replace(/\s/g, '');
+
+        for (var i = 0; i < base32.length; i++) {
+            var val = base32chars.indexOf(base32.charAt(i).toUpperCase());
+            bits += leftpad(val.toString(2), 5, '0');
+        }
+
+        for (var i = 0; i+4 <= bits.length; i+=4) {
+            var chunk = bits.substr(i, 4);
+            hex = hex + parseInt(chunk, 2).toString(16);
+        }
+        return hex;
+    }
+
+    function leftpad(str, len, pad) {
+        if (len + 1 >= str.length) {
+            str = Array(len + 1 - str.length).join(pad) + str;
+        }
+        return str;
+    }
+
+    function updateOtp() {
+        var key = base32tohex($('#secret').val());
+        var epoch = Math.round(new Date().getTime() / 1000.0);
+        var time = leftpad(dec2hex(Math.floor(epoch / 30)), 16, '0');
+
+        var shaObj = new jsSHA("SHA-1", "HEX");
+        shaObj.setHMACKey(key, "HEX");
+        shaObj.update(time);
+        var hmac = shaObj.getHMAC("HEX");
+        
+        $('#secretHex').text(key);
+        $('#secretHexLength').text((key.length * 4) + ' bits'); 
+        $('#epoch').text(time);
+        $('#hmac').empty();
+
+        if (hmac == 'KEY MUST BE IN BYTE INCREMENTS') {
+            $('#hmac').append($('<span/>').addClass('label important').append(hmac));
+        } else {
+            var offset = hex2dec(hmac.substring(hmac.length - 1));
+            var part1 = hmac.substr(0, offset * 2);
+            var part2 = hmac.substr(offset * 2, 8);
+            var part3 = hmac.substr(offset * 2 + 8, hmac.length - offset);
+            if (part1.length > 0 ) $('#hmac').append($('<span/>').addClass('label label-default').append(part1));
+            $('#hmac').append($('<span/>').addClass('label label-primary').append(part2));
+            if (part3.length > 0) $('#hmac').append($('<span/>').addClass('label label-default').append(part3));
+        }
+
+        var otp = (hex2dec(hmac.substr(offset * 2, 8)) & hex2dec('7fffffff')) + '';
+        otp = (otp).substr(otp.length - 6, 6);
+
+        $('#otp').text(otp);
+    }
+    
+    function timer() {
+        var epoch = Math.round(new Date().getTime() / 1000.0);
+        var sect = " secs";
+        var countDown = 30 - (epoch % 30);
+        if (epoch % 30 == 0) updateOtp();
+        $('#updatingIn').text(countDown + sect);
+    }
+
+    $(function () {
+        updateOtp();
+
+        $('#secret').keyup(function () {
+            updateOtp();
+        });
+        
+        setInterval(timer, 1000);
+    });
+</script>
+</body>
+</html>
